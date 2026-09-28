@@ -1,7 +1,8 @@
 name: 02 – Workflow Events
 
 on:
-  push:
+  #push:
+  pull_request:
 
 jobs:
   echo:

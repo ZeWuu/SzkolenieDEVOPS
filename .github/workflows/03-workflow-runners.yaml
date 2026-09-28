@@ -7,11 +7,11 @@ on:
 
 jobs:
   ubuntu-echo:
-    runs-on: ubuntu-latest
+    runs-on: lab
     steps:
       - name: Show OS
         run: |
-          echo "This job is running on an Ubuntu runner."
+          echo "This job is running on an self-hosted runner."
           echo "OS: $RUNNER_OS"
 
   windows-echo:

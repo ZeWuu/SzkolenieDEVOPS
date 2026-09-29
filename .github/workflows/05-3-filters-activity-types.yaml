@@ -1,0 +1,40 @@
+name: "05 – 3 – Event Filters and Activity Types"
+
+on:
+  push:
+    branches: [ main ]
+    paths-ignore:
+      - '04-using-actions/dokumentacja/**'
+
+  pull_request:
+    branches: [ main ]
+    paths-ignore:
+      - '04-using-actions/dokumentacja/**'
+
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        shell: bash
+        working-directory: 04-using-actions/
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Ustal wersję Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+
+      - name: Instalacja zależności
+        run: npm ci --include=dev
+
+      - name: Testy
+        run: npm test -- --ci

@@ -27,4 +27,4 @@ jobs:
 
       - name: Pobierz pogodę
         run: |
-          ./start.sh "${{ inputs.city }}" "${{ vars.MY_KLUCZYK }}" >> "$GITHUB_STEP_SUMMARY"
+          bash ./start.sh "${{ inputs.city }}" "${{ vars.MY_KLUCZYK }}" >> "$GITHUB_STEP_SUMMARY"

@@ -4,12 +4,12 @@ on:
   push:
     branches: [ main ]
     paths-ignore:
-      - '04-using-actions/dokumentacja/**'
+      - '05-filters-activity-types/dokumentacja/**'
 
   pull_request:
     branches: [ main ]
     paths-ignore:
-      - '04-using-actions/dokumentacja/**'
+      - '05-filters-activity-types/dokumentacja/**'
 
   workflow_dispatch:
 
@@ -23,7 +23,7 @@ jobs:
     defaults:
       run:
         shell: bash
-        working-directory: 04-using-actions/
+        working-directory: 05-filters-activity-types/
     steps:
       - name: Checkout
         uses: actions/checkout@v7

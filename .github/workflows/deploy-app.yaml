@@ -114,13 +114,13 @@ jobs:
 
       - name: Terraform init
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        working-directory: terraform/dg
+        working-directory: /home/student/example/SzkolenieDEVOPS/terraform/dg
         run: |
           terraform init
 
       - name: Terraform apply
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        working-directory: terraform/dg
+        working-directory: /home/student/example/SzkolenieDEVOPS/terraform/dg
         env:
           TF_VAR_digitalocean_token: ${{ secrets.DIGITALOCEAN_TOKEN }}
         run: |
@@ -129,7 +129,7 @@ jobs:
       - name: Get server IP
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         id: terraform
-        working-directory: terraform/dg
+        working-directory: /home/student/example/SzkolenieDEVOPS/terraform/dg
         run: |
           SERVER_IP=$(terraform output -raw server_ip)
 
@@ -145,10 +145,10 @@ jobs:
       - name: Check generated SSH key
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
-          test -f terraform/dg/artefacts/jsystems-lab-maja-id_ed25519
+          test -f /home/student/example/SzkolenieDEVOPS/terraform/dg/artefacts/jsystems-lab-maja-id_ed25519
 
           chmod 600 \
-            terraform/dg/artefacts/jsystems-lab-maja-id_ed25519
+            /home/student/example/SzkolenieDEVOPS/terraform/dg/artefacts/jsystems-lab-maja-id_ed25519
 
       - name: Wait for SSH
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -156,7 +156,7 @@ jobs:
           for i in {1..30}; do
 
             if ssh \
-              -i terraform/dg/artefacts/jsystems-lab-maja-id_ed25519 \
+              -i /home/student/example/SzkolenieDEVOPS/terraform/dg/artefacts/jsystems-lab-maja-id_ed25519 \
               -o StrictHostKeyChecking=no \
               -o UserKnownHostsFile=/dev/null \
               -o ConnectTimeout=5 \
@@ -189,7 +189,7 @@ jobs:
               app:
                 ansible_host: ${{ steps.terraform.outputs.server_ip }}
                 ansible_user: root
-                ansible_ssh_private_key_file: ${{ github.workspace }}/terraform/dg/artefacts/jsystems-lab-maja-id_ed25519
+                ansible_ssh_private_key_file: /home/student/example/SzkolenieDEVOPS/terraform/dg/artefacts/jsystems-lab-maja-id_ed25519
           EOF
 
           echo "Temporary inventory:"
@@ -207,7 +207,7 @@ jobs:
 
       - name: Deploy application with Ansible
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        working-directory: ansible
+        working-directory: /home/student/example/SzkolenieDEVOPS/ansible
         run: |
           ansible-playbook \
             -i "$RUNNER_TEMP/hosts.yml" \
@@ -252,7 +252,7 @@ jobs:
 
       - name: Terraform destroy
         if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main'
-        working-directory: terraform/dg
+        working-directory: /home/student/example/SzkolenieDEVOPS/terraform/dg
         env:
           TF_VAR_digitalocean_token: ${{ secrets.DIGITALOCEAN_TOKEN }}
         run: |

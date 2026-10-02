@@ -1,4 +1,4 @@
 - name: '[NGINX] - PLAYBOOK RUN'
-  hosts: "lab-master"
+  hosts: "lab-agent"
   roles:
     - { role: nginx}

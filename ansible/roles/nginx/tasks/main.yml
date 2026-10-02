@@ -3,4 +3,4 @@
     name: nginx
     state: present
   become: true
-  notify: restart nginx
+  #notify: restart nginx

@@ -13,28 +13,21 @@ jobs:
       LOCAL_IMAGE_NAME: python_pogoda:test
       WORKDIR: ./06-context/pogoda_python_flusk
 
-    steps:
+      TF_VAR_digitalocean_token: ${{ secrets.DIGITALOCEAN_TOKEN }}
+      TF_VAR_name_prefix: jsystems-lab-maja
+      TF_VAR_region: fra1
+      TF_VAR_droplet_image: ubuntu-24-04-x64
+      TF_VAR_droplet_size: s-1vcpu-1gb
+      TF_VAR_project_environment: Development
 
-      # ==========================================
-      # CHECKOUT
-      # ==========================================
+    steps:
 
       - name: Checkout repository
         uses: actions/checkout@v4
 
-
-      # ==========================================
-      # DOCKER BUILD
-      # ==========================================
-
       - name: Build Docker image
         run: |
           docker build -t "$LOCAL_IMAGE_NAME" "$WORKDIR"
-
-
-      # ==========================================
-      # LOCAL TEST
-      # ==========================================
 
       - name: Run container
         run: |
@@ -52,7 +45,6 @@ jobs:
       - name: Test /weather endpoint
         run: |
           set -e
-
           echo "Testowanie endpointu /weather..."
 
           curl -f \
@@ -72,11 +64,6 @@ jobs:
         run: |
           docker stop pogoda_api || true
           docker rm pogoda_api || true
-
-
-      # ==========================================
-      # DOCKER HUB
-      # ==========================================
 
       - name: Login to Docker Hub
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -107,11 +94,6 @@ jobs:
           docker push "$HUB_IMAGE_BASE:latest"
           docker push "$HUB_IMAGE_BASE:$SHORT_SHA"
 
-
-      # ==========================================
-      # TERRAFORM
-      # ==========================================
-
       - name: Terraform init
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         working-directory: terrafrom/dg
@@ -120,14 +102,7 @@ jobs:
 
       - name: Terraform apply
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        working-directory: terraform/dg
-        env:
-          TF_VAR_digitalocean_token: ${{ secrets.DIGITALOCEAN_TOKEN }}
-          TF_VAR_name_prefix: jsystems-lab-maja
-          TF_VAR_region: fra1
-          TF_VAR_droplet_image: ubuntu-24-04-x64
-          TF_VAR_droplet_size: s-1vcpu-1gb
-          TF_VAR_project_environment: Development
+        working-directory: terrafrom/dg
         run: |
           terraform apply -auto-approve
 
@@ -139,21 +114,13 @@ jobs:
           SERVER_IP=$(terraform output -raw server_ip)
 
           echo "Server IP: $SERVER_IP"
-
           echo "server_ip=$SERVER_IP" >> "$GITHUB_OUTPUT"
-
-
-      # ==========================================
-      # SSH
-      # ==========================================
 
       - name: Check generated SSH key
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
           test -f terrafrom/dg/artefacts/jsystems-lab-maja-id_ed25519
-
-          chmod 600 \
-            terrafrom/dg/artefacts/jsystems-lab-maja-id_ed25519
+          chmod 600 terrafrom/dg/artefacts/jsystems-lab-maja-id_ed25519
 
       - name: Wait for SSH
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -174,16 +141,10 @@ jobs:
 
             echo "Waiting for server..."
             sleep 10
-
           done
 
           echo "Server did not become available"
           exit 1
-
-
-      # ==========================================
-      # ANSIBLE INVENTORY
-      # ==========================================
 
       - name: Create temporary Ansible inventory
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -200,11 +161,6 @@ jobs:
           echo "Temporary inventory:"
           cat "$RUNNER_TEMP/hosts.yml"
 
-
-      # ==========================================
-      # ANSIBLE
-      # ==========================================
-
       - name: Install Ansible Docker collection
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
@@ -218,11 +174,6 @@ jobs:
             -i "$RUNNER_TEMP/hosts.yml" \
             playbooks/deploy_pogoda.yml
 
-
-      # ==========================================
-      # FINAL TEST
-      # ==========================================
-
       - name: Test deployed application
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
@@ -233,11 +184,6 @@ jobs:
 
           echo
           echo "OK - aplikacja działa na DigitalOcean."
-
-
-      # ==========================================
-      # CLEANUP
-      # ==========================================
 
       - name: Cleanup Docker test container
         if: always()
@@ -258,7 +204,5 @@ jobs:
       - name: Terraform destroy
         if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main'
         working-directory: terrafrom/dg
-        env:
-          TF_VAR_digitalocean_token: ${{ secrets.DIGITALOCEAN_TOKEN }}
         run: |
           terraform destroy -auto-approve

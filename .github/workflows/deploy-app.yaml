@@ -1,4 +1,4 @@
-name: "06-06 Pogoda API CI"
+name: "deploy-app"
 
 on:
   push:

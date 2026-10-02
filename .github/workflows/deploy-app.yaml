@@ -1,0 +1,259 @@
+name: "06-06 Pogoda API CI"
+
+on:
+  push:
+
+  workflow_dispatch:
+
+jobs:
+  build-and-test:
+    runs-on: self-hosted
+
+    env:
+      LOCAL_IMAGE_NAME: python_pogoda:test
+      WORKDIR: ./06-context/pogoda_python_flusk
+
+    steps:
+
+      # ==========================================
+      # CHECKOUT
+      # ==========================================
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+
+      # ==========================================
+      # DOCKER BUILD
+      # ==========================================
+
+      - name: Build Docker image
+        run: |
+          docker build -t "$LOCAL_IMAGE_NAME" "$WORKDIR"
+
+
+      # ==========================================
+      # LOCAL TEST
+      # ==========================================
+
+      - name: Run container
+        run: |
+          docker run -d \
+            --name pogoda_api \
+            -p 8000:8000 \
+            -e OPENWEATHER_API_KEY="${{ secrets.OPENWEATHER_API_KEY }}" \
+            "$LOCAL_IMAGE_NAME"
+
+      - name: Wait for API
+        run: |
+          echo "Czekam na start API..."
+          sleep 10
+
+      - name: Test /weather endpoint
+        run: |
+          set -e
+
+          echo "Testowanie endpointu /weather..."
+
+          curl -f \
+            "http://localhost:8000/weather?city=Warsaw&api_key=${{ secrets.OPENWEATHER_API_KEY }}"
+
+          echo
+          echo "OK - endpoint /weather zwrócił odpowiedź 2xx."
+
+      - name: Show container logs on failure
+        if: failure()
+        run: |
+          echo "Logi kontenera:"
+          docker logs pogoda_api || true
+
+      - name: Cleanup container
+        if: always()
+        run: |
+          docker stop pogoda_api || true
+          docker rm pogoda_api || true
+
+
+      # ==========================================
+      # DOCKER HUB
+      # ==========================================
+
+      - name: Login to Docker Hub
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Tag image for Docker Hub
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          SHORT_SHA="${GITHUB_SHA::7}"
+          HUB_IMAGE_BASE="${{ secrets.DOCKERHUB_USERNAME }}/python_pogoda"
+
+          echo "Taguję obraz:"
+          echo " - $HUB_IMAGE_BASE:latest"
+          echo " - $HUB_IMAGE_BASE:$SHORT_SHA"
+
+          docker tag "$LOCAL_IMAGE_NAME" "$HUB_IMAGE_BASE:latest"
+          docker tag "$LOCAL_IMAGE_NAME" "$HUB_IMAGE_BASE:$SHORT_SHA"
+
+      - name: Push images to Docker Hub
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          SHORT_SHA="${GITHUB_SHA::7}"
+          HUB_IMAGE_BASE="${{ secrets.DOCKERHUB_USERNAME }}/python_pogoda"
+
+          docker push "$HUB_IMAGE_BASE:latest"
+          docker push "$HUB_IMAGE_BASE:$SHORT_SHA"
+
+
+      # ==========================================
+      # TERRAFORM
+      # ==========================================
+
+      - name: Terraform init
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        working-directory: terraform/dg
+        run: |
+          terraform init
+
+      - name: Terraform apply
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        working-directory: terraform/dg
+        env:
+          TF_VAR_digitalocean_token: ${{ secrets.DIGITALOCEAN_TOKEN }}
+        run: |
+          terraform apply -auto-approve
+
+      - name: Get server IP
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        id: terraform
+        working-directory: terraform/dg
+        run: |
+          SERVER_IP=$(terraform output -raw server_ip)
+
+          echo "Server IP: $SERVER_IP"
+
+          echo "server_ip=$SERVER_IP" >> "$GITHUB_OUTPUT"
+
+
+      # ==========================================
+      # SSH
+      # ==========================================
+
+      - name: Check generated SSH key
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          test -f terraform/dg/artefacts/jsystems-lab-maja-id_ed25519
+
+          chmod 600 \
+            terraform/dg/artefacts/jsystems-lab-maja-id_ed25519
+
+      - name: Wait for SSH
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          for i in {1..30}; do
+
+            if ssh \
+              -i terraform/dg/artefacts/jsystems-lab-maja-id_ed25519 \
+              -o StrictHostKeyChecking=no \
+              -o UserKnownHostsFile=/dev/null \
+              -o ConnectTimeout=5 \
+              root@${{ steps.terraform.outputs.server_ip }} \
+              "echo ready"; then
+
+              echo "SSH jest dostępne."
+              exit 0
+            fi
+
+            echo "Waiting for server..."
+            sleep 10
+
+          done
+
+          echo "Server did not become available"
+          exit 1
+
+
+      # ==========================================
+      # ANSIBLE INVENTORY
+      # ==========================================
+
+      - name: Create temporary Ansible inventory
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          cat > "$RUNNER_TEMP/hosts.yml" <<EOF
+          all:
+            hosts:
+              app:
+                ansible_host: ${{ steps.terraform.outputs.server_ip }}
+                ansible_user: root
+                ansible_ssh_private_key_file: ${{ github.workspace }}/terraform/dg/artefacts/jsystems-lab-maja-id_ed25519
+          EOF
+
+          echo "Temporary inventory:"
+          cat "$RUNNER_TEMP/hosts.yml"
+
+
+      # ==========================================
+      # ANSIBLE
+      # ==========================================
+
+      - name: Install Ansible Docker collection
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          ansible-galaxy collection install community.docker
+
+      - name: Deploy application with Ansible
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        working-directory: ansible
+        run: |
+          ansible-playbook \
+            -i "$RUNNER_TEMP/hosts.yml" \
+            playbooks/deploy_pogoda.yml
+
+
+      # ==========================================
+      # FINAL TEST
+      # ==========================================
+
+      - name: Test deployed application
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          echo "Test aplikacji wdrożonej na DigitalOcean..."
+
+          curl --fail \
+            "http://${{ steps.terraform.outputs.server_ip }}:8000/weather?city=Warsaw&api_key=${{ secrets.OPENWEATHER_API_KEY }}"
+
+          echo
+          echo "OK - aplikacja działa na DigitalOcean."
+
+
+      # ==========================================
+      # CLEANUP
+      # ==========================================
+
+      - name: Cleanup Docker test container
+        if: always()
+        run: |
+          docker stop pogoda_api || true
+          docker rm pogoda_api || true
+
+      - name: Cleanup local Docker image
+        if: always()
+        run: |
+          docker image rm "$LOCAL_IMAGE_NAME" || true
+
+      - name: Cleanup temporary Ansible inventory
+        if: always()
+        run: |
+          rm -f "$RUNNER_TEMP/hosts.yml"
+
+      - name: Terraform destroy
+        if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        working-directory: terraform/dg
+        env:
+          TF_VAR_digitalocean_token: ${{ secrets.DIGITALOCEAN_TOKEN }}
+        run: |
+          terraform destroy -auto-approve

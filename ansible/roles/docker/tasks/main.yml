@@ -1,0 +1,32 @@
+---
+- name: Update apt cache
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Install Docker
+  ansible.builtin.apt:
+    name:
+      - docker.io
+    state: present
+
+- name: Ensure Docker is started
+  ansible.builtin.service:
+    name: docker
+    state: started
+    enabled: true
+
+- name: Pull application image
+  community.docker.docker_image:
+    name: zewuu/python_pogoda
+    tag: latest
+    source: pull
+
+- name: Run application container
+  community.docker.docker_container:
+    name: python_pogoda
+    image: zewuu/python_pogoda:latest
+    state: started
+    restart_policy: unless-stopped
+    ports:
+      - "8000:8000"

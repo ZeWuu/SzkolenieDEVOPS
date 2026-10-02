@@ -1,0 +1,7 @@
+---
+- name: Deploy Python weather application
+  hosts: app
+  become: true
+
+  roles:
+    - docker

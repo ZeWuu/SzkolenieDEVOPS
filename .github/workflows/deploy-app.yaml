@@ -120,11 +120,16 @@ jobs:
 
       - name: Terraform apply
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        working-directory: terrafrom/dg
+        working-directory: terraform/dg
         env:
           TF_VAR_digitalocean_token: ${{ secrets.DIGITALOCEAN_TOKEN }}
+          TF_VAR_name_prefix: jsystems-lab-maja
+          TF_VAR_region: fra1
+          TF_VAR_droplet_image: ubuntu-24-04-x64
+          TF_VAR_droplet_size: s-1vcpu-1gb
+          TF_VAR_project_environment: Development
         run: |
-          terraform apply -auto-approve
+        terraform apply -auto-approve
 
       - name: Get server IP
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
